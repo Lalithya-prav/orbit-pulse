@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Globe from 'react-globe.gl';
 
 export default function GlobeView({
@@ -9,21 +9,39 @@ export default function GlobeView({
   autoFollow,
 }) {
   const globeRef = useRef();
+  const [dimensions, setDimensions] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  // Keep the 3D WebGL canvas full-screen on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Smooth camera transition when switching satellites or when autoFollow is active
   useEffect(() => {
     if (selectedSat && globeRef.current) {
       globeRef.current.pointOfView(
-        { lat: selectedSat.lat, lng: selectedSat.lng, altitude: 1.9 },
+        { lat: selectedSat.lat, lng: selectedSat.lng, altitude: 2.0 },
         autoFollow ? 800 : 1200
       );
     }
   }, [selectedSat?.name, autoFollow ? Math.round(selectedSat?.lat) : null]);
 
   return (
-    <div className="w-full h-full cursor-move">
+    <div className="fixed inset-0 w-screen h-screen cursor-move">
       <Globe
         ref={globeRef}
+        width={dimensions.width}
+        height={dimensions.height}
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
         bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
         backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
