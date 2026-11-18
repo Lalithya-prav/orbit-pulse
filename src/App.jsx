@@ -1,122 +1,99 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import React, { useState, useEffect, useMemo } from 'react';
+import GlobeView from './components/GlobeView';
+import TelemetryHUD from './components/TelemetryHUD';
+import {
+  FALLBACK_TLE,
+  parseTLEData,
+  getSatellitePosition,
+  getOrbitPath,
+} from './utils/orbitalMath';
 
-function App() {
-  const [count, setCount] = useState(0)
+const CELESTRAK_URL =
+  'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle';
+
+export default function App() {
+  const [rawSats, setRawSats] = useState([]);
+  const [liveSats, setLiveSats] = useState([]);
+  const [selectedName, setSelectedName] = useState('ISS (ZARYA)');
+  const [autoFollow, setAutoFollow] = useState(false);
+  const [dataSource, setDataSource] = useState('INITIALIZING...');
+  const [utcTime, setUtcTime] = useState('');
+
+  // 1. Fetch live TLEs from NORAD/CelesTrak on startup
+  useEffect(() => {
+    async function loadTLEs() {
+      try {
+        const res = await fetch(CELESTRAK_URL);
+        if (!res.ok) throw new Error('CelesTrak HTTP error');
+        const text = await res.text();
+        const parsed = parseTLEData(text).slice(0, 15); // Keep top 15 stations/objects clean
+        if (parsed.length === 0) throw new Error('Empty TLE payload');
+        setRawSats(parsed);
+        setSelectedName(parsed[0].name);
+        setDataSource('CELESTRAK NORAD LIVE');
+      } catch (err) {
+        const fallback = parseTLEData(FALLBACK_TLE);
+        setRawSats(fallback);
+        setSelectedName(fallback[0].name);
+        setDataSource('CACHED EPHEMERIS');
+      }
+    }
+    loadTLEs();
+  }, []);
+
+  // 2. Propagate orbital positions every 1 second
+  useEffect(() => {
+    if (rawSats.length === 0) return;
+
+    const updatePositions = () => {
+      const now = new Date();
+      setUtcTime(now.toISOString().substring(11, 19));
+
+      const updated = rawSats
+        .map((sat) => {
+          const pos = getSatellitePosition(sat.satrec, now);
+          return pos ? { ...sat, ...pos } : null;
+        })
+        .filter(Boolean);
+
+      setLiveSats(updated);
+    };
+
+    updatePositions();
+    const timer = setInterval(updatePositions, 1000);
+    return () => clearInterval(timer);
+  }, [rawSats]);
+
+  const selectedSat = useMemo(
+    () => liveSats.find((s) => s.name === selectedName) || liveSats[0],
+    [liveSats, selectedName]
+  );
+
+  // 3. Calculate 95-minute predicted ground track when target changes
+  const orbitPath = useMemo(() => {
+    if (!selectedSat?.satrec) return [];
+    return getOrbitPath(selectedSat.satrec, 95, 1.5);
+  }, [selectedSat?.name]);
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <main className="relative w-screen h-screen bg-slate-950 overflow-hidden select-none">
+      <TelemetryHUD
+        satellites={liveSats}
+        selectedSat={selectedSat}
+        onSelectSat={(sat) => setSelectedName(sat.name)}
+        autoFollow={autoFollow}
+        setAutoFollow={setAutoFollow}
+        dataSource={dataSource}
+        utcTime={utcTime}
+      />
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      <GlobeView
+        satellites={liveSats}
+        selectedSat={selectedSat}
+        orbitPath={orbitPath}
+        onSelectSat={(sat) => setSelectedName(sat.name)}
+        autoFollow={autoFollow}
+      />
+    </main>
+  );
 }
-
-export default App
