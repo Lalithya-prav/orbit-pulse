@@ -1,16 +1,57 @@
-# React + Vite
+# OrbitPulse — Real-Time 3D Orbital Telemetry & SGP4 Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A real-time astrodynamics and orbital telemetry console that ingests live NORAD Two-Line Element (TLE) datasets and propagates spacecraft state vectors at 1Hz using **SGP4 orbital mechanics** on an interactive WebGL 3D globe.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## System Architecture
 
-## React Compiler
+```mermaid
+flowchart LR
+    A[CelesTrak NORAD TLE API] --> B[TLE Parser & Metadata Extractor]
+    B --> C[SGP4 Orbital Propagator]
+    C --> D[1Hz Geodetic State Vector]
+    C --> E[95-Min Future Trajectory]
+    D & E --> F[Three.js / WebGL 3D Globe]
+    D --> G[Mission Control Telemetry HUD]
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Key Engineering Highlights
+* **Client-Side SGP4 Propagation:** Computes real-time Earth-Centered Inertial (ECI) to Geodetic ($\text{Lat}, \text{Lon}, \text{Alt}$) coordinate transformations and scalar orbital velocity at 1Hz via `satellite.js`.
+* **Predictive Ground-Track Modeling:** Integrates forward orbital state vectors over a 95-minute window (~1 full Low Earth Orbit revolution) to render future trajectory arcs.
+* **Zero-Downtime Ephemeris Pipeline:** Fetches live NORAD TLE feeds from CelesTrak with automatic fallback to cached orbital elements.
+* **Target Lock Camera System:** Smoothly interpolates 3D camera coordinates to track Low Earth Orbit spacecraft traveling at ~7.66 km/s.
 
-## Expanding the ESLint configuration
+## Local Setup
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+git clone [https://github.com/Lalithya-prav/orbit-pulse.git](https://github.com/Lalithya-prav/orbit-pulse.git)
+cd orbit-pulse
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173` in your browser to launch the telemetry console.
+
+## Project Structure
+
+```text
+orbit-pulse/
+├── src/
+│   ├── components/
+│   │   ├── GlobeView.jsx      # Full-viewport 3D WebGL Earth, markers & orbital arcs
+│   │   └── TelemetryHUD.jsx   # Mission control HUD, object selector & target lock
+│   ├── utils/
+│   │   └── orbitalMath.js     # TLE parser, SGP4 propagator & ground-track generator
+│   ├── App.jsx                # 1Hz real-time propagation loop & CelesTrak feed
+│   └── main.jsx
+├── package.json
+└── vite.config.js
+```
+
+## Tech Stack
+* **Frontend:** React, Vite, Tailwind CSS
+* **3D Rendering:** `react-globe.gl`, Three.js / WebGL
+* **Astrodynamics:** `satellite.js` (SGP4/SDP4 implementation)
+
+  
